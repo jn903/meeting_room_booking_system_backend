@@ -1,0 +1,216 @@
+import { Inject, Injectable, Logger, HttpStatus, HttpException, UnauthorizedException } from '@nestjs/common';
+import { InjectRepository } from '@nestjs/typeorm';
+import { md5 } from '../utils/index.js';
+import { Repository } from 'typeorm';
+import { RegisterUserDto } from './dto/register-user.dto.js';
+import { LoginUserDto } from './dto/login-user.dto.js';
+import { LoginUserVo } from './vo/login-user.vo.js';
+import { User } from './entities/user.entity.js';
+import { Role } from './entities/role.entity.js';
+import { Permission } from './entities/permission.entity.js';
+import { RedisService } from '../redis/redis.service.js';
+import { JwtService } from "@nestjs/jwt";
+import { ConfigService } from "@nestjs/config";
+
+@Injectable()
+export class UsersService {
+  private logger = new Logger(UsersService.name);
+  // 抽离生成 Token 的方法
+  private generateTokens(user: any) {
+    const payload = {
+      userId: user.id,
+      username: user.username,
+      roles: user.roles,
+      permissions: user.permissions
+    };
+
+    const access_token = this.jwtService.sign(payload, {
+      expiresIn: this.configService.get('jwt_access_token_expires_time') || '30m'
+    });
+
+    const refresh_token = this.jwtService.sign({ userId: user.id }, {
+      expiresIn: this.configService.get('jwt_refresh_token_expires_time') || '7d'
+    });
+
+    return { access_token, refresh_token };
+  }
+
+  constructor(
+    @InjectRepository(User)
+    private readonly userRepository: Repository<User>,
+    @InjectRepository(Role)
+    private readonly roleRepository: Repository<Role>,
+    @InjectRepository(Permission)
+    private readonly permissionRepository: Repository<Permission>,
+    private readonly redisService: RedisService,
+    private readonly jwtService: JwtService,
+    private readonly configService: ConfigService,
+  ) { }
+
+  async register(user: RegisterUserDto) {
+    const captcha = await this.redisService.get(`captcha_${user.email}`);
+
+    if (!captcha) {
+      throw new HttpException('验证码已失效', HttpStatus.BAD_REQUEST);
+    }
+
+    if (user.captcha !== captcha) {
+      throw new HttpException('验证码不正确', HttpStatus.BAD_REQUEST);
+    }
+
+    const foundUser = await this.userRepository.findOneBy({
+      username: user.username
+    });
+
+    if (foundUser) {
+      throw new HttpException('用户已存在', HttpStatus.BAD_REQUEST);
+    }
+
+    const newUser = new User();
+    newUser.username = user.username;
+    newUser.password = md5(user.password);
+    newUser.email = user.email;
+    newUser.nickName = user.nickName;
+
+    try {
+      await this.userRepository.save(newUser);
+      return '注册成功';
+    } catch (e) {
+      this.logger.error(e, UsersService);
+      return '注册失败';
+    }
+  }
+
+  async initData() {
+    const user1 = new User();
+    user1.username = "zhangsan";
+    user1.password = md5("111111");
+    user1.email = "xxx@xx.com";
+    user1.isAdmin = true;
+    user1.nickName = '张三';
+    user1.phoneNumber = '13233323333';
+
+    const user2 = new User();
+    user2.username = 'lisi';
+    user2.password = md5("222222");
+    user2.email = "yy@yy.com";
+    user2.nickName = '李四';
+
+    const role1 = new Role();
+    role1.name = '管理员';
+
+    const role2 = new Role();
+    role2.name = '普通用户';
+
+    const permission1 = new Permission();
+    permission1.code = 'ccc';
+    permission1.description = '访问 ccc 接口';
+
+    const permission2 = new Permission();
+    permission2.code = 'ddd';
+    permission2.description = '访问 ddd 接口';
+
+    user1.roles = [role1];
+    user2.roles = [role2];
+
+    role1.permissions = [permission1, permission2];
+    role2.permissions = [permission1];
+
+    await this.permissionRepository.save([permission1, permission2]);
+    await this.roleRepository.save([role1, role2]);
+    await this.userRepository.save([user1, user2]);
+  }
+
+  async login(loginUserDto: LoginUserDto, isAdmin: boolean) {
+    const user = await this.userRepository.findOne({
+      where: {
+        username: loginUserDto.username,
+        isAdmin
+      },
+      relations: {
+        roles: {
+          permissions: true
+        }
+      }
+    });
+
+    if (!user) {
+      throw new HttpException('用户不存在', HttpStatus.BAD_REQUEST);
+    }
+
+    if (user.password !== md5(loginUserDto.password)) {
+      throw new HttpException('密码错误', HttpStatus.BAD_REQUEST);
+    }
+
+    const vo = new LoginUserVo();
+    vo.userInfo = {
+      id: user.id,
+      username: user.username,
+      nickName: user.nickName,
+      email: user.email,
+      phoneNumber: user.phoneNumber,
+      headPic: user.headPic,
+      createTime: user.createTime.getTime(),
+      isFrozen: user.isFrozen,
+      isAdmin: user.isAdmin,
+      roles: user.roles.map(item => item.name),
+      permissions: user.roles.reduce<Permission[]>((arr, item) => {
+        item.permissions.forEach(permission => {
+          if (!arr.some(p => p.id === permission.id)) {
+            arr.push(permission);
+          }
+        });
+        return arr;
+      }, [])
+    }
+
+    return vo;
+  }
+
+  async findUserById(userId: number, isAdmin: boolean) {
+    const user = await this.userRepository.findOne({
+      where: {
+        id: userId,
+        isAdmin,
+      },
+      relations: {
+        roles: {
+          permissions: true,
+        },
+      },
+    });
+
+    if (!user) {
+      throw new HttpException('用户不存在', HttpStatus.BAD_REQUEST);
+    }
+
+    return {
+      id: user.id,
+      username: user.username,
+      isAdmin: user.isAdmin,
+      roles: user.roles.map(item => item.name),
+      permissions: [
+        ...new Set(user.roles.flatMap(role => role.permissions.map(p => p.code))),
+      ],
+    };
+  }
+
+  async handleRefreshToken(refreshToken: string, isAdmin: boolean) {
+    try {
+      const data = this.jwtService.verify(refreshToken);
+
+      const user = await this.findUserById(data.userId, isAdmin);
+      if (!user) {
+        throw new UnauthorizedException('用户不存在或权限不匹配');
+      }
+
+      // 合法，签发新 Token
+      return this.generateTokens(user);
+    } catch (e) {
+      // 过滤掉自己抛出的 UnauthorizedException，避免被全部捕获
+      if (e instanceof UnauthorizedException) throw e;
+      throw new UnauthorizedException('token 已失效，请重新登录');
+    }
+  }
+
+}
