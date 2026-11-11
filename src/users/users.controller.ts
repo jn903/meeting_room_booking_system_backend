@@ -1,7 +1,7 @@
 import {
   Inject, Controller, Get, Post, Body,
   Patch, Param, Delete, Query, UnauthorizedException,
-  SetMetadata
+  SetMetadata, ParseIntPipe, BadRequestException
 } from '@nestjs/common';
 import { UsersService } from './users.service.js';
 import { CreateUserDto } from './dto/create-user.dto.js';
@@ -16,6 +16,7 @@ import { ConfigService } from "@nestjs/config";
 import { RequireLogin, RequirePermission, UserInfo } from '../custom.decorator.js';
 import type { UserInfo as UserInfoVo } from "./vo/login-user.vo.js";
 import { UserDetailVo } from './vo/user-info.vo.js';
+import { positiveIntPipe } from '../generate-positive-int.pipe.js';
 
 @Controller('users')
 export class UsersController {
@@ -193,6 +194,19 @@ export class UsersController {
   async freeze(@Query('id') userId: number) {
     await this.usersService.freezeUserById(userId);
     return 'success';
+  }
+
+  // 查询用户列表
+  @Get('list')
+  async list(
+    @Query('pageNo', positiveIntPipe('pageNo')) pageNo: number,
+    @Query('pageSize', positiveIntPipe('pageSize')) pageSize: number,
+    @Query('username') username: string,
+    @Query('nickName') nickName: string,
+    @Query('email') email: string
+  ) {
+    // return this.usersService.findUsersByPage(pageNo, pageSize);
+    return await this.usersService.findUsers(username, nickName, email, pageNo, pageSize);
   }
 
   @Get('bbb')

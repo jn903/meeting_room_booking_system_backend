@@ -1,7 +1,7 @@
 import { Inject, Injectable, Logger, HttpStatus, HttpException, UnauthorizedException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { md5 } from '../utils/index.js';
-import { Repository } from 'typeorm';
+import { Like, Repository } from 'typeorm';
 import { RegisterUserDto } from './dto/register-user.dto.js';
 import { LoginUserDto } from './dto/login-user.dto.js';
 import { LoginUserVo } from './vo/login-user.vo.js';
@@ -299,10 +299,68 @@ export class UsersService {
     if (!user) {
       throw new HttpException('用户不存在', HttpStatus.BAD_REQUEST);
     }
-    
+
     user.isFrozen = true;
 
     await this.userRepository.save(user);
+  }
+
+  async findUsersByPage(pageNo: number, pageSize: number) {
+    const skipCount = (pageNo - 1) * pageSize;
+
+    const [users, totalCount] = await this.userRepository.findAndCount({
+      select: {
+        id: true,
+        username: true,
+        nickName: true,
+        email: true,
+        phoneNumber: true,
+        isFrozen: true,
+        headPic: true,
+        createTime: true,
+      },
+      skip: skipCount,
+      take: pageSize,
+    });
+
+    return { users, totalCount };
+  }
+
+  async findUsers(username: string, nickName: string, email: string, pageNo: number, pageSize: number) {
+    const skipCount = (pageNo - 1) * pageSize;
+
+    const condition: Record<string, any> = {};
+
+    if (username) {
+      condition.username = Like(`%${username}%`);
+    }
+    if (nickName) {
+      condition.nickName = Like(`%${nickName}%`);
+    }
+    if (email) {
+      condition.email = Like(`%${email}%`);
+    }
+
+    const [users, totalCount] = await this.userRepository.findAndCount({
+      select: {
+        id: true,
+        username: true,
+        nickName: true,
+        email: true,
+        phoneNumber: true,
+        isFrozen: true,
+        headPic: true,
+        createTime: true,
+      },
+      skip: skipCount,
+      take: pageSize,
+      where: condition
+    });
+
+    return {
+      users,
+      totalCount
+    }
   }
 
 }
