@@ -1,10 +1,8 @@
 import {
-  Inject, Controller, Get, Post, Body,
-  Patch, Param, Delete, Query, UnauthorizedException,
-  SetMetadata, ParseIntPipe, BadRequestException
+  Controller, Get, Post, Body,
+  Query, UnauthorizedException,
 } from '@nestjs/common';
 import { UsersService } from './users.service.js';
-import { CreateUserDto } from './dto/create-user.dto.js';
 import { LoginUserDto } from './dto/login-user.dto.js';
 import { RegisterUserDto } from './dto/register-user.dto.js';
 import { UpdateUserPasswordDto } from './dto/update-user-password.dto.js';
@@ -13,11 +11,12 @@ import { RedisService } from '../redis/redis.service.js';
 import { EmailService } from '../email/email.service.js';
 import { JwtService } from "@nestjs/jwt";
 import { ConfigService } from "@nestjs/config";
-import { RequireLogin, RequirePermission, UserInfo } from '../custom.decorator.js';
-import type { UserInfo as UserInfoVo } from "./vo/login-user.vo.js";
+import { RequireLogin, UserInfo } from '../custom.decorator.js';
 import { UserDetailVo } from './vo/user-info.vo.js';
 import { positiveIntPipe } from '../generate-positive-int.pipe.js';
+import { ApiTags } from '@nestjs/swagger';
 
+@ApiTags('用户管理模块')
 @Controller('users')
 export class UsersController {
   constructor(
@@ -179,16 +178,6 @@ export class UsersController {
     return '发送成功';
   }
 
-
-  @Get('aaa')
-  // @SetMetadata('require-login', true)
-  // @SetMetadata('require-permission', ['ddd'])
-  @RequireLogin()
-  @RequirePermission('ddd')
-  aaaa(@UserInfo('username') username: string, @UserInfo() userInfo: UserInfoVo) {
-    return 'aaa';
-  }
-
   // 冻结用户
   @Get('freeze')
   async freeze(@Query('id') userId: number) {
@@ -207,11 +196,6 @@ export class UsersController {
   ) {
     // return this.usersService.findUsersByPage(pageNo, pageSize);
     return await this.usersService.findUsers(username, nickName, email, pageNo, pageSize);
-  }
-
-  @Get('bbb')
-  bbb() {
-    return 'bbb';
   }
 
 }
