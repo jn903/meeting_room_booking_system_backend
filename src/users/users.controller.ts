@@ -1,18 +1,21 @@
-import { 
-  Inject, Controller, Get, Post, Body, 
-  Patch, Param, Delete, Query, UnauthorizedException ,
+import {
+  Inject, Controller, Get, Post, Body,
+  Patch, Param, Delete, Query, UnauthorizedException,
   SetMetadata
 } from '@nestjs/common';
 import { UsersService } from './users.service.js';
 import { CreateUserDto } from './dto/create-user.dto.js';
 import { LoginUserDto } from './dto/login-user.dto.js';
 import { RegisterUserDto } from './dto/register-user.dto.js';
+import { UpdateUserPasswordDto } from './dto/update-user-password.dto.js';
+import { UpdateUserDto } from './dto/update-user.dto.js';
 import { RedisService } from '../redis/redis.service.js';
 import { EmailService } from '../email/email.service.js';
 import { JwtService } from "@nestjs/jwt";
 import { ConfigService } from "@nestjs/config";
-import { RequireLogin, RequirePermission,UserInfo } from '../custom.decorator.js';
-import type { UserInfo as UserInfoVo} from "./vo/login-user.vo.js";
+import { RequireLogin, RequirePermission, UserInfo } from '../custom.decorator.js';
+import type { UserInfo as UserInfoVo } from "./vo/login-user.vo.js";
+import { UserDetailVo } from './vo/user-info.vo.js';
 
 @Controller('users')
 export class UsersController {
@@ -24,11 +27,13 @@ export class UsersController {
     private readonly configService: ConfigService,
   ) { }
 
+  // 注册
   @Post('register')
   async register(@Body() registerUser: RegisterUserDto) {
     return await this.usersService.register(registerUser);
   }
 
+  // 发送注册验证码
   @Get('register-captcha')
   async captcha(@Query('address') address: string) {
     const code = Math.random().toString().slice(2, 8);
@@ -43,12 +48,14 @@ export class UsersController {
     return '发送成功';
   }
 
+  // 初始化数据
   @Get("init-data")
   async initData() {
     await this.usersService.initData();
     return 'done';
   }
 
+  // 登录
   @Post('login')
   async userLogin(@Body() loginUser: LoginUserDto) {
     const vo = await this.usersService.login(loginUser, false);
@@ -70,6 +77,7 @@ export class UsersController {
     return vo;
   }
 
+  // 管理员登录
   @Post('admin/login')
   async adminLogin(@Body() loginUser: LoginUserDto) {
     const vo = await this.usersService.login(loginUser, true);
@@ -91,7 +99,7 @@ export class UsersController {
     return vo;
   }
 
-  // 用户刷新token
+  // 刷新token
   @Get('refresh')
   async refresh(@Query('refreshToken') refreshToken: string) {
     return await this.usersService.handleRefreshToken(refreshToken, false);
@@ -103,12 +111,80 @@ export class UsersController {
     return await this.usersService.handleRefreshToken(refreshToken, true);
   }
 
+  // 查询用户信息
+  @Get('info')
+  @RequireLogin()
+  async info(@UserInfo('userId') userId: number) {
+    const user = await this.usersService.findUserDetailById(userId);
+
+    if (!user) {
+      throw new UnauthorizedException('用户不存在');
+    }
+
+    const vo = new UserDetailVo();
+    vo.id = user.id;
+    vo.email = user.email;
+    vo.username = user.username;
+    vo.headPic = user.headPic;
+    vo.phoneNumber = user.phoneNumber;
+    vo.nickName = user.nickName;
+    vo.createTime = user.createTime;
+    vo.isFrozen = user.isFrozen;
+
+    return vo;
+  }
+
+  // 更新用户密码
+  @Post(['update_password', 'admin/update_password'])
+  @RequireLogin()
+  async updatePassword(@UserInfo('userId') userId: number, @Body() passwordDto: UpdateUserPasswordDto) {
+    return await this.usersService.updatePassword(userId, passwordDto);
+  }
+
+  // 发送更新密码验证码
+  @Get('update_password/captcha')
+  async updatePasswordCaptcha(@Query('address') address: string) {
+    const code = Math.random().toString().slice(2, 8);
+
+    await this.redisService.set(`update_password_captcha_${address}`, code, 10 * 60);
+
+    await this.emailService.sendMail({
+      to: address,
+      subject: '更改密码验证码',
+      html: `<p>你的更改密码验证码是 ${code}</p>`
+    });
+    return '发送成功';
+  }
+
+  // 更新用户信息
+  @Post(['update', 'admin/update'])
+  @RequireLogin()
+  async update(@UserInfo('userId') userId: number, @Body() updateUserDto: UpdateUserDto) {
+    return await this.usersService.update(userId, updateUserDto);
+  }
+
+  // 发送更新用户信息验证码
+  @Get('update/captcha')
+  async updateCaptcha(@Query('address') address: string) {
+    const code = Math.random().toString().slice(2, 8);
+
+    await this.redisService.set(`update_user_captcha_${address}`, code, 10 * 60);
+
+    await this.emailService.sendMail({
+      to: address,
+      subject: '更改用户信息验证码',
+      html: `<p>你的验证码是 ${code}</p>`
+    });
+    return '发送成功';
+  }
+
+
   @Get('aaa')
   // @SetMetadata('require-login', true)
   // @SetMetadata('require-permission', ['ddd'])
   @RequireLogin()
   @RequirePermission('ddd')
-  aaaa(@UserInfo('username') username: string, @UserInfo() userInfo:UserInfoVo) {
+  aaaa(@UserInfo('username') username: string, @UserInfo() userInfo: UserInfoVo) {
     return 'aaa';
   }
 
