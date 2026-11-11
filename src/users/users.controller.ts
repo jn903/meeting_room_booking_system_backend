@@ -188,6 +188,13 @@ export class UsersController {
     return 'aaa';
   }
 
+  // 冻结用户
+  @Get('freeze')
+  async freeze(@Query('id') userId: number) {
+    await this.usersService.freezeUserById(userId);
+    return 'success';
+  }
+
   @Get('bbb')
   bbb() {
     return 'bbb';

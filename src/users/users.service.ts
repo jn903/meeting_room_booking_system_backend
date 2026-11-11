@@ -257,12 +257,12 @@ export class UsersService {
 
   async update(userId: number, updateUserDto: UpdateUserDto) {
     const captcha = await this.redisService.get(`update_user_captcha_${updateUserDto.email}`);
-    console.log('captcha:', updateUserDto.captcha,`update_user_captcha_${updateUserDto.email}`);
+    console.log('captcha:', updateUserDto.captcha, `update_user_captcha_${updateUserDto.email}`);
     if (!captcha) {
       throw new HttpException('验证码已失效', HttpStatus.BAD_REQUEST);
     }
 
-    
+
     if (updateUserDto.captcha !== captcha) {
       throw new HttpException('验证码不正确', HttpStatus.BAD_REQUEST);
     }
@@ -271,7 +271,7 @@ export class UsersService {
       id: userId
     });
 
-    if(!foundUser) {
+    if (!foundUser) {
       throw new HttpException('用户不存在', HttpStatus.BAD_REQUEST);
     }
 
@@ -289,6 +289,20 @@ export class UsersService {
       this.logger.error(e, UsersService);
       return '用户信息修改成功';
     }
+  }
+
+  async freezeUserById(id: number) {
+    const user = await this.userRepository.findOneBy({
+      id
+    });
+
+    if (!user) {
+      throw new HttpException('用户不存在', HttpStatus.BAD_REQUEST);
+    }
+    
+    user.isFrozen = true;
+
+    await this.userRepository.save(user);
   }
 
 }
