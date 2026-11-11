@@ -1,7 +1,6 @@
 import { SetMetadata, createParamDecorator, ExecutionContext } from '@nestjs/common';
 import { Request } from 'express';
 
-// 假设你的 JwtUserData 定义类似这样
 export interface JwtUserData {
   userId: number;
   username: string;
