@@ -22,6 +22,7 @@ export class UsersService {
     const payload = {
       userId: user.id,
       username: user.username,
+      email:user.email,
       roles: user.roles,
       permissions: user.permissions
     };
@@ -190,6 +191,7 @@ export class UsersService {
       id: user.id,
       username: user.username,
       isAdmin: user.isAdmin,
+      email:user.email,
       roles: user.roles.map(item => item.name),
       permissions: [
         ...new Set(user.roles.flatMap(role => role.permissions.map(p => p.code))),
@@ -225,7 +227,7 @@ export class UsersService {
     }
   }
 
-  async updatePassword(userId: number, passwordDto: UpdateUserPasswordDto) {
+  async updatePassword(passwordDto: UpdateUserPasswordDto) {
     const captcha = await this.redisService.get(`update_password_captcha_${passwordDto.email}`);
 
     if (!captcha) {
@@ -237,7 +239,7 @@ export class UsersService {
     }
 
     const foundUser = await this.userRepository.findOneBy({
-      id: userId
+      username: passwordDto.username
     });
 
     if (!foundUser) {
@@ -257,11 +259,10 @@ export class UsersService {
 
   async update(userId: number, updateUserDto: UpdateUserDto) {
     const captcha = await this.redisService.get(`update_user_captcha_${updateUserDto.email}`);
-    console.log('captcha:', updateUserDto.captcha, `update_user_captcha_${updateUserDto.email}`);
+
     if (!captcha) {
       throw new HttpException('验证码已失效', HttpStatus.BAD_REQUEST);
     }
-
 
     if (updateUserDto.captcha !== captcha) {
       throw new HttpException('验证码不正确', HttpStatus.BAD_REQUEST);

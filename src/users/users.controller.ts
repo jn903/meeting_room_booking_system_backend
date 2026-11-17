@@ -63,6 +63,7 @@ export class UsersController {
     vo.accessToken = this.jwtService.sign({
       userId: vo.userInfo.id,
       username: vo.userInfo.username,
+      email:vo.userInfo.email,
       roles: vo.userInfo.roles,
       permissions: vo.userInfo.permissions
     }, {
@@ -85,6 +86,7 @@ export class UsersController {
     vo.accessToken = this.jwtService.sign({
       userId: vo.userInfo.id,
       username: vo.userInfo.username,
+      email:vo.userInfo.email,
       roles: vo.userInfo.roles,
       permissions: vo.userInfo.permissions
     }, {
@@ -136,9 +138,8 @@ export class UsersController {
 
   // 更新用户密码
   @Post(['update_password', 'admin/update_password'])
-  @RequireLogin()
-  async updatePassword(@UserInfo('userId') userId: number, @Body() passwordDto: UpdateUserPasswordDto) {
-    return await this.usersService.updatePassword(userId, passwordDto);
+  async updatePassword(@Body() passwordDto: UpdateUserPasswordDto) {
+    return await this.usersService.updatePassword(passwordDto);
   }
 
   // 发送更新密码验证码
@@ -165,7 +166,8 @@ export class UsersController {
 
   // 发送更新用户信息验证码
   @Get('update/captcha')
-  async updateCaptcha(@Query('address') address: string) {
+  @RequireLogin()
+  async updateCaptcha(@UserInfo('email') address: string) {
     const code = Math.random().toString().slice(2, 8);
 
     await this.redisService.set(`update_user_captcha_${address}`, code, 10 * 60);

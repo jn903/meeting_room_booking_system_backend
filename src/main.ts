@@ -25,6 +25,9 @@ async function bootstrap() {
   app.useGlobalInterceptors(new InvokeRecordInterceptor());
   app.useGlobalFilters(new CustomExceptionFilter());
 
+  // 允许跨域
+  app.enableCors();
+
   const configService = app.get(ConfigService);
   await app.listen(configService.get('nest_server_port') ?? 3000);
 }

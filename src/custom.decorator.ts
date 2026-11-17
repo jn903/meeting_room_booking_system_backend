@@ -4,6 +4,7 @@ import { Request } from 'express';
 export interface JwtUserData {
   userId: number;
   username: string;
+  email:string;
   roles: string[];
 }
 
