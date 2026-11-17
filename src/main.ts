@@ -7,9 +7,10 @@ import { InvokeRecordInterceptor } from './invoke-record.interceptor.js';
 import { UnloginFilter } from './unlogin.filter.js';
 import {CustomExceptionFilter} from './custom-exception.filter.js';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
+import { NestExpressApplication } from "@nestjs/platform-express";
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule);
+  const app = await NestFactory.create<NestExpressApplication>(AppModule);
 
   const swaggerConfig = new DocumentBuilder()
     .setTitle('User Management API')
@@ -24,6 +25,9 @@ async function bootstrap() {
   app.useGlobalInterceptors(new FormatResponseInterceptor());
   app.useGlobalInterceptors(new InvokeRecordInterceptor());
   app.useGlobalFilters(new CustomExceptionFilter());
+  app.useStaticAssets('uploads',{
+    prefix:"/uploads"
+  })
 
   // 允许跨域
   app.enableCors();

@@ -1,6 +1,8 @@
 import {
   Controller, Get, Post, Body,
   Query, UnauthorizedException,
+  UseInterceptors, UploadedFile, 
+  BadRequestException
 } from '@nestjs/common';
 import { UsersService } from './users.service.js';
 import { LoginUserDto } from './dto/login-user.dto.js';
@@ -15,6 +17,10 @@ import { RequireLogin, UserInfo } from '../custom.decorator.js';
 import { UserDetailVo } from './vo/user-info.vo.js';
 import { positiveIntPipe } from '../generate-positive-int.pipe.js';
 import { ApiTags } from '@nestjs/swagger';
+import { FileInterceptor } from '@nestjs/platform-express';
+import type { Express } from 'express';
+import * as path from 'path';
+import { storage } from "../my-file-storage.js";
 
 @ApiTags('用户管理模块')
 @Controller('users')
@@ -63,7 +69,7 @@ export class UsersController {
     vo.accessToken = this.jwtService.sign({
       userId: vo.userInfo.id,
       username: vo.userInfo.username,
-      email:vo.userInfo.email,
+      email: vo.userInfo.email,
       roles: vo.userInfo.roles,
       permissions: vo.userInfo.permissions
     }, {
@@ -86,7 +92,7 @@ export class UsersController {
     vo.accessToken = this.jwtService.sign({
       userId: vo.userInfo.id,
       username: vo.userInfo.username,
-      email:vo.userInfo.email,
+      email: vo.userInfo.email,
       roles: vo.userInfo.roles,
       permissions: vo.userInfo.permissions
     }, {
@@ -168,6 +174,8 @@ export class UsersController {
   @Get('update/captcha')
   @RequireLogin()
   async updateCaptcha(@UserInfo('email') address: string) {
+    console.log(address);
+    
     const code = Math.random().toString().slice(2, 8);
 
     await this.redisService.set(`update_user_captcha_${address}`, code, 10 * 60);
@@ -199,5 +207,28 @@ export class UsersController {
     // return this.usersService.findUsersByPage(pageNo, pageSize);
     return await this.usersService.findUsers(username, nickName, email, pageNo, pageSize);
   }
+
+  // 上传图片
+  @Post('upload')
+  @UseInterceptors(FileInterceptor('file', {
+    dest: 'uploads',
+    storage:storage,
+    limits:{
+      fileSize:1024 * 1024 * 3
+    },
+    fileFilter(req, file, callback) {
+      const extname = path.extname(file.originalname);
+      if (['.png', '.jpg', '.gif'].includes(extname)) {
+        callback(null, true);
+      } else {
+        callback(new BadRequestException('只能上传图片'), false);
+      }
+    }
+  }))
+  uploadFile(@UploadedFile() file: Express.Multer.File) {
+    console.log('file', file);
+    return file.path;
+  }
+
 
 }
