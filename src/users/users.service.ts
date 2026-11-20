@@ -301,7 +301,8 @@ export class UsersService {
       throw new HttpException('用户不存在', HttpStatus.BAD_REQUEST);
     }
 
-    user.isFrozen = true;
+    // 对冻结状态取反
+    user.isFrozen = !user.isFrozen;
 
     await this.userRepository.save(user);
   }
