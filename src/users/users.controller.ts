@@ -226,9 +226,6 @@ export class UsersController {
     }
   }))
   uploadFile(@UploadedFile() file: Express.Multer.File) {
-    console.log('file', file);
     return file.path;
   }
-
-
 }
